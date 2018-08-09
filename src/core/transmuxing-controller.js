@@ -265,6 +265,7 @@ class TransmuxingController {
 
             this._demuxer.onError = this._onDemuxException.bind(this);
             this._demuxer.onMediaInfo = this._onMediaInfo.bind(this);
+            this._demuxer.onMetaDataArrived = this._onMetaDataArrived.bind(this);
 
             this._remuxer.bindDataSource(this._demuxer
                          .bindDataSource(this._ioctl
@@ -314,6 +315,10 @@ class TransmuxingController {
         }
     }
 
+    _onMetaDataArrived(metadata) {
+        this._emitter.emit(TransmuxingEvents.METADATA_ARRIVED, metadata);
+    }
+
     _onIOSeeked() {
         this._remuxer.insertDiscontinuity();
     }
@@ -324,8 +329,10 @@ class TransmuxingController {
 
         if (nextSegmentIndex < this._mediaDataSource.segments.length) {
             this._internalAbort();
+            this._remuxer.flushStashedSamples();
             this._loadSegment(nextSegmentIndex);
         } else {
+            this._remuxer.flushStashedSamples();
             this._emitter.emit(TransmuxingEvents.LOADING_COMPLETE);
             this._disableStatisticsReporter();
         }

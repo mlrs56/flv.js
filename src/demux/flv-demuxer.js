@@ -52,6 +52,7 @@ class FLVDemuxer {
 
         this._onError = null;
         this._onMediaInfo = null;
+        this._onMetaDataArrived = null;
         this._onTrackMetadata = null;
         this._onDataAvailable = null;
 
@@ -122,6 +123,7 @@ class FLVDemuxer {
 
         this._onError = null;
         this._onMediaInfo = null;
+        this._onMetaDataArrived = null;
         this._onTrackMetadata = null;
         this._onDataAvailable = null;
     }
@@ -173,6 +175,14 @@ class FLVDemuxer {
 
     set onMediaInfo(callback) {
         this._onMediaInfo = callback;
+    }
+
+    get onMetaDataArrived() {
+        return this._onMetaDataArrived;
+    }
+
+    set onMetaDataArrived(callback) {
+        this._onMetaDataArrived = callback;
     }
 
     // prototype: function(type: number, info: string): void
@@ -359,6 +369,10 @@ class FLVDemuxer {
             this._metadata = scriptData;
             let onMetaData = this._metadata.onMetaData;
 
+            if (this._onMetaDataArrived) {
+                this._onMetaDataArrived(Object.assign({}, onMetaData));
+            }
+
             if (typeof onMetaData.hasAudio === 'boolean') {  // hasAudio
                 if (this._hasAudioFlagOverrided === false) {
                     this._hasAudio = onMetaData.hasAudio;
@@ -540,7 +554,7 @@ class FLVDemuxer {
                 }
             } else if (aacData.packetType === 1) {  // AAC raw frame data
                 let dts = this._timestampBase + tagTimestamp;
-                let aacSample = {unit: aacData.data, dts: dts, pts: dts};
+                let aacSample = {unit: aacData.data, length: aacData.data.byteLength, dts: dts, pts: dts};
                 track.samples.push(aacSample);
                 track.length += aacData.data.length;
             } else {
@@ -587,7 +601,7 @@ class FLVDemuxer {
                 return;
             }
             let dts = this._timestampBase + tagTimestamp;
-            let mp3Sample = {unit: data, dts: dts, pts: dts};
+            let mp3Sample = {unit: data, length: data.byteLength, dts: dts, pts: dts};
             track.samples.push(mp3Sample);
             track.length += data.length;
         }
@@ -825,7 +839,8 @@ class FLVDemuxer {
         let v = new DataView(arrayBuffer, dataOffset, dataSize);
 
         let packetType = v.getUint8(0);
-        let cts = v.getUint32(0, !le) & 0x00FFFFFF;
+        let cts_unsigned = v.getUint32(0, !le) & 0x00FFFFFF;
+        let cts = (cts_unsigned << 8) >> 8;  // convert to 24-bit signed int
 
         if (packetType === 0) {  // AVCDecoderConfigurationRecord
             this._parseAVCDecoderConfigurationRecord(arrayBuffer, dataOffset + 4, dataSize - 4);
@@ -950,6 +965,7 @@ class FLVDemuxer {
             mi.fps = meta.frameRate.fps;
             mi.profile = meta.profile;
             mi.level = meta.level;
+            mi.refFrames = config.ref_frames;
             mi.chromaFormat = config.chroma_format_string;
             mi.sarNum = meta.sarRatio.width;
             mi.sarDen = meta.sarRatio.height;
